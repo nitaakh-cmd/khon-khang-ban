@@ -323,6 +323,21 @@ const homeView = () => layout(`
   </section>
 `);
 
+const joinOnlyView = () => layout(`
+  <section class="join-only">
+    <div class="panel gate-card join-card">
+      <span class="brand-kicker">Invite Link</span>
+      <h2>เข้าห้อง ${escapeHtml(state.routeCode)}</h2>
+      <p class="muted">ใส่ชื่อของคุณเพื่อเข้าห้องรอเล่นกับเพื่อน</p>
+      <form class="form" onsubmit="joinRoom(event)">
+        <label>ชื่อของคุณ <input name="playerName" maxlength="24" required placeholder="ชื่อที่เพื่อนเห็น" /></label>
+        <input name="roomCode" type="hidden" value="${escapeHtml(state.routeCode)}" />
+        <button class="btn primary jumbo" type="submit">เข้าห้อง</button>
+      </form>
+    </div>
+  </section>
+`);
+
 const playerList = () => `
   <div class="card compact player-board">
     <div class="row between">
@@ -403,7 +418,7 @@ const roleCard = () => {
       <div class="role-icon">${icon}</div>
       <div>
         <div class="label">การ์ดบทบาทของฉัน</div>
-        <div class="role-name">${isNeighbor ? "คนข้างบ้าน" : "ผู้เล่นทั่วไป"}</div>
+        <div class="role-name">${isNeighbor ? "คนข้างบ้าน" : "คนบ้านเดียวกัน"}</div>
         <div class="word">${isNeighbor ? "คุณคือคนข้างบ้าน" : escapeHtml(state.me.secretWord || "รอคำลับ")}</div>
         <p class="muted">${isNeighbor ? "ฟังบทสนทนาแล้วกลมกลืนให้มากที่สุด" : "ถามตอบโดยห้ามพูดคำนี้ตรง ๆ"}</p>
       </div>
@@ -421,7 +436,7 @@ const roleRevealOverlay = () => {
         <div class="reveal-flip">
           <div class="role-icon reveal-icon">${isNeighbor ? "?" : "!"}</div>
           <div class="label">เปิดบทบาท</div>
-          <h2>${isNeighbor ? "คุณคือคนข้างบ้าน" : "คำลับของคุณ"}</h2>
+          <h2>${isNeighbor ? "คุณคือคนข้างบ้าน" : "คุณคือคนบ้านเดียวกัน"}</h2>
           <div class="reveal-word">${isNeighbor ? "อย่าให้ใครจับได้" : escapeHtml(state.me.secretWord || "")}</div>
           <p class="muted">${isNeighbor ? "ฟังคำถามและเดาคำจากบทสนทนา" : "จำคำนี้ไว้ แล้วถามตอบให้เนียน"}</p>
           <button class="btn primary" onclick="window.acknowledgeRole()">รับทราบ</button>
@@ -548,7 +563,7 @@ const winnerPopup = (result, neighborWin) => {
     <div class="winner-backdrop">
       <section class="winner-card ${neighborWin ? "neighbor" : "normal"}">
         <div class="winner-badge">WINNER</div>
-        <h2>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ!" : "ฝ่ายผู้เล่นทั่วไปชนะ!"}</h2>
+        <h2>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ!" : "ฝ่ายคนบ้านเดียวกันชนะ!"}</h2>
         <p>${escapeHtml(result.reason)}</p>
         <div class="winner-word">คำลับ: <strong>${escapeHtml(result.secretWord)}</strong></div>
         <button class="btn primary jumbo" onclick="window.acknowledgeResult()">ดูเฉลยทั้งหมด</button>
@@ -563,7 +578,7 @@ const resultView = () => {
   return layout(`
     <section class="panel result result-stage ${neighborWin ? "neighbor" : ""}">
       <span class="brand-kicker">Party Result</span>
-      <h2>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ" : "ฝ่ายผู้เล่นทั่วไปชนะ"}</h2>
+      <h2>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ" : "ฝ่ายคนบ้านเดียวกันชนะ"}</h2>
       <p class="muted">${escapeHtml(result.reason)}</p>
       <div class="card compact secret-result">
         <h3>คำลับ</h3>
@@ -576,7 +591,7 @@ const resultView = () => {
           <div class="player result-player">
             ${avatar(player, result.neighborIds.includes(player.id) ? "neighbor" : "")}
             <strong>${escapeHtml(player.name)}</strong>
-            <span class="pill">${result.neighborIds.includes(player.id) ? "คนข้างบ้าน" : "ผู้เล่นทั่วไป"}</span>
+            <span class="pill">${result.neighborIds.includes(player.id) ? "คนข้างบ้าน" : "คนบ้านเดียวกัน"}</span>
           </div>
         `).join("")}
       </div>
@@ -588,7 +603,7 @@ const resultView = () => {
 
 const render = () => {
   if (!state.room) {
-    app.innerHTML = homeView();
+    app.innerHTML = state.routeCode ? joinOnlyView() : homeView();
     return;
   }
   if (state.room.status === "lobby") app.innerHTML = lobbyView();
