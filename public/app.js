@@ -170,9 +170,14 @@ window.updateSettings = async (event) => {
 
 window.action = async (path) => {
   unlockSound();
+  const payload = { roomCode: currentCode(), playerId: playerId() };
+  console.log("[action] clicked", { path, payload });
   try {
-    await api(path, { roomCode: currentCode(), playerId: playerId() });
+    console.log("[action] before fetch", { path, payload });
+    const result = await api(path, payload);
+    console.log("[action] after fetch", { path, result });
   } catch (err) {
+    console.error("[action] exception", err);
     toast(err.message);
   }
 };
@@ -297,8 +302,9 @@ const lobbyView = () => layout(`
           <label class="check"><input name="speechTimerEnabled" type="checkbox" ${state.room.settings.speechTimerEnabled ? "checked" : ""} /> เปิดจับเวลาพูด 30 วิ วน 3 รอบ</label>
           <div class="row">
             <button class="btn" type="submit">บันทึกตั้งค่า</button>
-            <button class="btn primary" type="button" onclick="action('/api/game/start')" ${state.room.players.length < 3 ? "disabled" : ""}>เริ่มเกม</button>
+            <button class="btn primary" type="button" onclick="window.action('/api/game/start')" ${state.room.players.length < 3 ? "disabled" : ""}>เริ่มเกม</button>
           </div>
+          ${state.room.players.length < 3 ? `<span class="muted">ต้องมีผู้เล่นอย่างน้อย 3 คน ตอนนี้มี ${state.room.players.length} คน</span>` : ""}
         </form>
       </section>
     ` : `
@@ -349,9 +355,9 @@ const timerPanel = () => {
       ${isHost() ? `
         <div class="row">
           ${timer.status === "paused"
-            ? `<button class="btn primary" onclick="action('/api/timer/resume')">เล่นต่อ</button>`
-            : `<button class="btn" onclick="action('/api/timer/pause')">หยุดเวลา</button>`}
-          <button class="btn" onclick="action('/api/timer/skip')">ข้ามคนนี้</button>
+            ? `<button class="btn primary" onclick="window.action('/api/timer/resume')">เล่นต่อ</button>`
+            : `<button class="btn" onclick="window.action('/api/timer/pause')">หยุดเวลา</button>`}
+          <button class="btn" onclick="window.action('/api/timer/skip')">ข้ามคนนี้</button>
         </div>
       ` : ""}
     </section>
@@ -368,7 +374,7 @@ const gameView = () => layout(`
           <h2>ช่วงถามตอบ</h2>
           <span class="muted">คุยนอกระบบ แล้วกดเริ่มโหวตเมื่อพร้อม</span>
         </div>
-        ${isHost() ? `<button class="btn primary" onclick="action('/api/game/vote/start')">เริ่มโหวต</button>` : ""}
+        ${isHost() ? `<button class="btn primary" onclick="window.action('/api/game/vote/start')">เริ่มโหวต</button>` : ""}
       </div>
     </section>
   </div>
@@ -394,7 +400,7 @@ const voteView = () => {
           <span class="pill">เลือกแล้ว ${state.selectedVotes.size}/${needed}</span>
           <div class="row">
             <button class="btn primary" onclick="submitVote()" ${state.selectedVotes.size !== needed ? "disabled" : ""}>ส่งโหวต</button>
-            ${isHost() ? `<button class="btn" onclick="action('/api/vote/finish')">จบโหวต</button>` : ""}
+            ${isHost() ? `<button class="btn" onclick="window.action('/api/vote/finish')">จบโหวต</button>` : ""}
           </div>
         </div>
       </section>
@@ -444,7 +450,7 @@ const resultView = () => {
           </div>
         `).join("")}
       </div>
-      ${isHost() ? `<div class="divider"></div><button class="btn primary" onclick="action('/api/game/reset')">กลับ Lobby เพื่อเริ่มรอบใหม่</button>` : ""}
+      ${isHost() ? `<div class="divider"></div><button class="btn primary" onclick="window.action('/api/game/reset')">กลับ Lobby เพื่อเริ่มรอบใหม่</button>` : ""}
     </section>
   `);
 };
