@@ -49,7 +49,7 @@ const defaultSettings = (settings = {}) => ({
   maxPlayers: clamp(settings.maxPlayers ?? 20, 3, 20),
   neighborCount: clamp(settings.neighborCount ?? 1, 1, 6),
   speechTimerEnabled: Boolean(settings.speechTimerEnabled),
-  speechSecondsPerTurn: 30,
+  speechSecondsPerTurn: clamp(settings.speechSecondsPerTurn ?? 20, 5, 30),
   speechRounds: 3
 });
 
@@ -114,6 +114,7 @@ const validateSettings = (room, nextSettings) => {
   settings.maxPlayers = clamp(nextSettings.maxPlayers ?? settings.maxPlayers, 3, 20);
   settings.neighborCount = clamp(nextSettings.neighborCount ?? settings.neighborCount, 1, Math.max(1, settings.maxPlayers - 1));
   settings.speechTimerEnabled = Boolean(nextSettings.speechTimerEnabled);
+  settings.speechSecondsPerTurn = clamp(nextSettings.speechSecondsPerTurn ?? settings.speechSecondsPerTurn, 5, 30);
   return settings;
 };
 
@@ -134,6 +135,7 @@ const startTimerLoop = (room) => {
       if (timer.countdownSecondsRemaining <= 0) {
         timer.status = "speaking";
         timer.secondsRemaining = room.settings.speechSecondsPerTurn;
+        timer.totalSeconds = room.settings.speechSecondsPerTurn;
       }
       sendRoom(room);
       return;
@@ -161,6 +163,7 @@ const advanceSpeaker = (room) => {
     timer.status = "completed";
     timer.currentPlayerId = null;
     timer.secondsRemaining = 0;
+    timer.totalSeconds = room.settings.speechSecondsPerTurn;
     timer.countdownSecondsRemaining = 0;
     stopTimer(room);
     return;
@@ -169,6 +172,7 @@ const advanceSpeaker = (room) => {
   timer.status = "countdown";
   timer.countdownSecondsRemaining = 3;
   timer.secondsRemaining = room.settings.speechSecondsPerTurn;
+  timer.totalSeconds = room.settings.speechSecondsPerTurn;
 };
 
 const startRound = (room) => {
@@ -186,6 +190,7 @@ const startRound = (room) => {
     currentSpeechRound: 1,
     totalSpeechRounds: room.settings.speechRounds,
     secondsRemaining: room.settings.speechSecondsPerTurn,
+    totalSeconds: room.settings.speechSecondsPerTurn,
     countdownSecondsRemaining: 3,
     order: room.players.map((player) => player.id)
   } : {
@@ -196,6 +201,7 @@ const startRound = (room) => {
     currentSpeechRound: 0,
     totalSpeechRounds: room.settings.speechRounds,
     secondsRemaining: 0,
+    totalSeconds: room.settings.speechSecondsPerTurn,
     countdownSecondsRemaining: 0,
     order: []
   };
