@@ -11,7 +11,8 @@ const state = {
   lastTimerKey: "",
   lastRoundId: "",
   acknowledgedRounds: new Set(),
-  acknowledgedResults: new Set()
+  acknowledgedResults: new Set(),
+  flippedRounds: new Set()
 };
 
 const storageKey = (code) => `kkb:${code}:playerId`;
@@ -107,6 +108,7 @@ const connectEvents = (code, id) => {
     state.me = data.me;
     if (state.room.round?.id !== state.lastRoundId) {
       state.selectedVotes.clear();
+      state.flippedRounds.delete(state.lastRoundId);
       state.lastRoundId = state.room.round?.id || "";
     }
     handleTimerSound(state.room.round?.timer);
@@ -195,8 +197,16 @@ window.syncSpeechSeconds = (input) => {
 };
 
 window.acknowledgeRole = () => {
-  if (state.room?.round?.id) state.acknowledgedRounds.add(state.room.round.id);
+  if (state.room?.round?.id) state.flippedRounds.add(state.room.round.id);
   render();
+};
+
+window.markReady = async () => {
+  try {
+    await api("/api/game/ready", { roomCode: currentCode(), playerId: playerId() });
+  } catch (err) {
+    toast(err.message);
+  }
 };
 
 window.acknowledgeResult = () => {
@@ -347,11 +357,12 @@ const playerList = () => `
     <div class="players">
       ${state.room.players.map((player) => {
         const speaking = state.room.round?.timer?.currentPlayerId === player.id;
+        const ready = state.room.round?.readyPlayerIds?.includes(player.id);
         return `
           <div class="player ${speaking ? "speaking" : ""}">
             ${avatar(player, `${player.isHost ? "host" : ""} ${speaking ? "speaking" : ""}`)}
             <strong>${escapeHtml(player.name)}</strong>
-            <span class="muted">${player.isHost ? "Host" : ""}${player.id === state.me.playerId ? " คุณ" : ""}</span>
+            <span class="muted">${ready ? "พร้อม" : player.isHost ? "Host" : ""}${player.id === state.me.playerId ? " คุณ" : ""}</span>
           </div>
         `;
       }).join("")}
@@ -427,6 +438,7 @@ const roleCard = () => {
 };
 
 const roleRevealOverlay = () => {
+  if (state.room?.status !== "reveal") return "";
   const roundId = state.room?.round?.id;
   if (!roundId || state.acknowledgedRounds.has(roundId)) return "";
   const isNeighbor = state.me.role === "neighbor";
@@ -444,6 +456,45 @@ const roleRevealOverlay = () => {
       </section>
     </div>
   `;
+};
+
+const readyRoleCard = () => {
+  const roundId = state.room?.round?.id;
+  const flipped = state.flippedRounds.has(roundId);
+  const isNeighbor = state.me.role === "neighbor";
+  return `
+    <button class="ready-flip-card ${flipped ? "flipped" : ""} ${isNeighbor ? "neighbor" : ""}" onclick="window.acknowledgeRole()">
+      <span class="flip-face flip-back">
+        <span class="brand-kicker">Role Card</span>
+        <strong>แตะการ์ดเพื่อดูบทบาทของคุณ</strong>
+      </span>
+      <span class="flip-face flip-front">
+        <span class="role-icon">${isNeighbor ? "?" : "!"}</span>
+        <span class="label">การ์ดบทบาทของฉัน</span>
+        <span class="role-name">${isNeighbor ? "คนข้างบ้าน" : "คนบ้านเดียวกัน"}</span>
+        <span class="word">${isNeighbor ? "คุณคือคนข้างบ้าน" : escapeHtml(state.me.secretWord || "รอคำลับ")}</span>
+        <span class="muted">${isNeighbor ? "ฟังบทสนทนาแล้วเดาคำให้ได้" : "ถามตอบโดยห้ามพูดคำนี้ตรง ๆ"}</span>
+      </span>
+    </button>
+  `;
+};
+
+const revealReadyView = () => {
+  const round = state.room.round;
+  const readyIds = round?.readyPlayerIds || [];
+  const isReady = readyIds.includes(state.me.playerId);
+  const hasSeenRole = state.flippedRounds.has(round?.id);
+  return layout(`
+    <section class="panel reveal-ready-stage">
+      <span class="brand-kicker">Reveal / Ready</span>
+      <h2>ดูการ์ดของคุณ แล้วกดพร้อมเมื่อพร้อมเริ่มเล่น</h2>
+      ${readyRoleCard()}
+      <div class="ready-footer">
+        <span class="pill">พร้อม ${round.readyCount}/${state.room.players.length}</span>
+        <button class="btn primary jumbo" onclick="window.markReady()" ${!hasSeenRole || isReady ? "disabled" : ""}>${isReady ? "พร้อมแล้ว" : "พร้อม"}</button>
+      </div>
+    </section>
+  `, `<aside class="stack">${playerList()}${rulesCard()}</aside>`);
 };
 
 const timerPanel = () => {
@@ -502,7 +553,6 @@ const gameView = () => layout(`
       </div>
     </section>
   </div>
-  ${roleRevealOverlay()}
 `, `<aside class="stack">${playerList()}${rulesCard()}</aside>`);
 
 const voteView = () => {
@@ -607,6 +657,7 @@ const render = () => {
     return;
   }
   if (state.room.status === "lobby") app.innerHTML = lobbyView();
+  if (state.room.status === "reveal") app.innerHTML = revealReadyView();
   if (state.room.status === "playing") app.innerHTML = gameView();
   if (state.room.status === "voting") app.innerHTML = voteView();
   if (state.room.status === "neighbor_guess") app.innerHTML = guessView();

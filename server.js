@@ -65,6 +65,8 @@ const publicRoom = (room) => {
       id: round.id,
       voteTargetCount: round.neighborIds.length,
       votesSubmitted: round.votes.size,
+      readyPlayerIds: [...round.readyPlayerIds],
+      readyCount: round.readyPlayerIds.size,
       guessedPlayerIds: [...round.guesses.keys()],
       capturedIds: round.capturedIds,
       timer: round.timer,
@@ -182,17 +184,18 @@ const startRound = (room) => {
   const shuffled = [...room.players].sort(() => Math.random() - 0.5);
   const neighborIds = shuffled.slice(0, neighborCount).map((player) => player.id);
   const roles = new Map(room.players.map((player) => [player.id, neighborIds.includes(player.id) ? "neighbor" : "normal"]));
+  const speakerOrder = [...room.players].sort(() => Math.random() - 0.5).map((player) => player.id);
   const timer = room.settings.speechTimerEnabled ? {
     enabled: true,
-    status: "countdown",
-    currentPlayerId: room.players[0].id,
+    status: "idle",
+    currentPlayerId: speakerOrder[0],
     currentPlayerIndex: 0,
     currentSpeechRound: 1,
     totalSpeechRounds: room.settings.speechRounds,
     secondsRemaining: room.settings.speechSecondsPerTurn,
     totalSeconds: room.settings.speechSecondsPerTurn,
     countdownSecondsRemaining: 3,
-    order: room.players.map((player) => player.id)
+    order: speakerOrder
   } : {
     enabled: false,
     status: "idle",
@@ -205,20 +208,33 @@ const startRound = (room) => {
     countdownSecondsRemaining: 0,
     order: []
   };
-  room.status = "playing";
+  room.status = "reveal";
   room.round = {
     id: uid("round"),
     secretWord: words[Math.floor(Math.random() * words.length)],
     roles,
     neighborIds,
     votes: new Map(),
+    readyPlayerIds: new Set(),
     guesses: new Map(),
     capturedIds: [],
     timer,
     result: null,
     startedAt: new Date().toISOString()
   };
-  if (timer.enabled) startTimerLoop(room);
+};
+
+const beginPlayingIfReady = (room) => {
+  if (room.status !== "reveal" || !room.round) return;
+  if (room.round.readyPlayerIds.size < room.players.length) return;
+  room.status = "playing";
+  if (room.round.timer.enabled) {
+    room.round.timer.status = "countdown";
+    room.round.timer.countdownSecondsRemaining = 3;
+    room.round.timer.secondsRemaining = room.settings.speechSecondsPerTurn;
+    room.round.timer.totalSeconds = room.settings.speechSecondsPerTurn;
+    startTimerLoop(room);
+  }
 };
 
 const tallyVotes = (room) => {
@@ -335,6 +351,16 @@ const handlers = {
     requireHost(room, body.playerId);
     stopTimer(room);
     startRound(room);
+    sendRoom(room);
+    json(res, 200, { room: publicRoom(room) });
+  },
+  "POST /api/game/ready": async (req, res) => {
+    const body = await readBody(req);
+    const room = getRoom(body.roomCode);
+    getPlayer(room, body.playerId);
+    if (room.status !== "reveal") throw error("ยังไม่ถึงช่วงเตรียมพร้อม");
+    room.round.readyPlayerIds.add(body.playerId);
+    beginPlayingIfReady(room);
     sendRoom(room);
     json(res, 200, { room: publicRoom(room) });
   },
