@@ -1,6 +1,11 @@
 # คนข้างบ้าน
 
-Realtime party game MVP.
+Realtime party game — Gameplay & UX Version 2.
+
+- ห้องเล่นแบบเรียลไทม์ รองรับ 3–20 คน
+- หมวดคำ 6 หมวด, Avatar Emoji และรอบใบ้คำ 1–3 รอบ
+- รองรับการเล่นผ่าน Discord หรือเล่นต่อหน้ากัน
+- Responsive สำหรับ Desktop, Tablet และ Mobile
 
 ## Run locally
 
