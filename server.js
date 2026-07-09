@@ -363,8 +363,13 @@ const handlers = {
     const body = await readBody(req);
     const room = getRoom(body.roomCode);
     requireHost(room, body.playerId);
+    if (room.status !== "lobby") throw error("เริ่มเกมได้เฉพาะจากห้องรอ");
+    if (room.players.length < 3) throw error("ต้องมีผู้เล่นอย่างน้อย 3 คน");
+    if (!room.settings.selectedCategories?.length) throw error("กรุณาเลือกหมวดคำ");
+    if (room.settings.neighborCount >= room.players.length) throw error("จำนวนคนข้างบ้านต้องน้อยกว่าจำนวนผู้เล่น");
     stopTimer(room);
     startRound(room);
+    console.log(`[game:start] room=${room.code} host=${body.playerId} players=${room.players.length} status=${room.status}`);
     sendRoom(room);
     json(res, 200, { room: publicRoom(room) });
   },

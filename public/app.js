@@ -179,6 +179,23 @@ window.action = async (path, extra = {}) => {
   try { await api(path, { roomCode: currentCode(), playerId: playerId(), ...extra }); }
   catch (err) { toast(err.message); }
 };
+const startGameBlockReason = () => {
+  if (!isHost()) return "เฉพาะ Host เท่านั้นที่เริ่มเกมได้";
+  if (state.room.players.length < 3) return "ต้องมีผู้เล่นอย่างน้อย 3 คน";
+  if (!state.room.settings.selectedCategories?.length) return "กรุณาเลือกหมวดคำ";
+  if (state.room.settings.neighborCount >= state.room.players.length) return "จำนวนคนข้างบ้านต้องน้อยกว่าจำนวนผู้เล่น";
+  return "";
+};
+window.startGame = async () => {
+  const reason = startGameBlockReason();
+  if (reason) return toast(reason);
+  unlockSound();
+  try {
+    await api("/api/game/start", { roomCode: currentCode(), playerId: playerId() });
+  } catch (err) {
+    toast(err.message);
+  }
+};
 window.toggleVote = (id) => {
   const needed = state.room.round.voteTargetCount;
   if (state.selectedVotes.has(id)) state.selectedVotes.delete(id);
@@ -303,7 +320,7 @@ const profileEditor = () => {
 const playerGrid = () => `<div class="waiting-players">${state.room.players.map((player) => `<article class="player-tile">${avatar(player, "large")}<strong>${escapeHtml(player.name)}</strong><span>${player.isHost ? "👑 Host" : player.isConnected ? "พร้อมอยู่ในห้อง" : "ขาดการเชื่อมต่อ"}</span></article>`).join("")}</div>`;
 const lobbyView = () => layout(`<main class="lobby-page">
   <section class="panel waiting-panel"><div class="section-heading"><div><span class="eyebrow">WAITING ROOM</span><h1>${escapeHtml(state.room.settings.roomName)}</h1><p>รหัสห้อง <strong>${state.room.code}</strong> · ${state.room.players.length}/${state.room.settings.maxPlayers} คน</p></div><button class="btn secondary" onclick="copyInvite()">คัดลอกลิงก์เชิญ</button></div>${playerGrid()}</section>
-  <aside class="lobby-side">${profileEditor()}${isHost() ? `<section class="panel"><h2>ตั้งค่าห้อง</h2><form class="form compact-form" onsubmit="updateSettings(event)">${settingsFields(state.room.settings)}<button class="btn secondary" type="submit">บันทึกตั้งค่า</button><button class="btn primary jumbo" type="button" onclick="action('/api/game/start')" ${state.room.players.length < 3 ? "disabled" : ""}>เริ่มเกม</button>${state.room.players.length < 3 ? `<p class="helper">ต้องมีผู้เล่นอย่างน้อย 3 คน</p>` : ""}</form></section>` : `<section class="panel wait-host"><div>☕</div><h2>รอ Host เริ่มเกม</h2><p>ระหว่างนี้เปลี่ยนชื่อและ Avatar ได้เลย</p></section>`}</aside>
+  <aside class="lobby-side">${profileEditor()}${isHost() ? (() => { const reason = startGameBlockReason(); return `<section class="panel"><h2>ตั้งค่าห้อง</h2><form class="form compact-form" onsubmit="updateSettings(event)">${settingsFields(state.room.settings)}<button class="btn secondary" type="submit">บันทึกตั้งค่า</button><button class="btn primary jumbo" type="button" onclick="window.startGame()" ${reason ? "disabled" : ""}>เริ่มเกม</button>${reason ? `<p class="helper start-reason">${escapeHtml(reason)}</p>` : ""}</form></section>`; })() : `<section class="panel wait-host"><div>☕</div><h2>รอ Host เริ่มเกม</h2><p>ระหว่างนี้เปลี่ยนชื่อและ Avatar ได้เลย</p></section>`}</aside>
 </main>`);
 
 const playerStatus = () => `<div class="ready-list">${state.room.players.map((player) => `<div>${avatar(player)}<span>${escapeHtml(player.name)}</span><strong>${state.room.round.readyPlayerIds.includes(player.id) ? "✓ พร้อม" : "กำลังดูการ์ด"}</strong></div>`).join("")}</div>`;
@@ -342,7 +359,7 @@ const gameView = () => {
   const next = playerName(turn.nextPlayerId);
   return layout(`<main class="play-page"><section class="turn-banner"><span>${turn.completed ? "จบรอบการใบ้คำแล้ว" : `ถึงตาของ “${escapeHtml(current)}” แล้ว`}</span><strong>${turn.completed ? "พร้อมเข้าสู่การโหวต" : turn.nextPlayerId ? `คนถัดไปคือ “${escapeHtml(next)}”` : "นี่คือคนสุดท้าย"}</strong></section>
     <section class="game-table">${circlePlayers()}${timerCenter()}</section>
-    <section class="play-controls panel"><div><strong>${escapeHtml(state.room.round.categoryLabel)}</strong><span>คำลับของคุณ: ${state.me.role === "normal" ? escapeHtml(state.me.secretWord) : "คุณคือคนข้างบ้าน"}</span></div>${isHost() ? `<div class="row">${timer.enabled ? `<button class="btn ghost" onclick="action('/api/timer/${timer.status === "paused" ? "resume" : "pause"}')">${timer.status === "paused" ? "เล่นต่อ" : "หยุดเวลา"}</button>` : ""}<button class="btn secondary" onclick="action('/api/game/turn/next')" ${turn.completed ? "disabled" : ""}>คนถัดไป</button><button class="btn primary" onclick="action('/api/game/vote/start')" ${!turn.completed ? "" : ""}>เริ่มโหวต</button></div>` : `<span>Host จะควบคุมลำดับการเล่น</span>`}</section>
+    <section class="play-controls panel"><div><strong>${escapeHtml(state.room.round.categoryLabel)}</strong><span>คำลับของคุณ: ${state.me.role === "normal" ? escapeHtml(state.me.secretWord) : "คุณคือคนข้างบ้าน"}</span></div>${isHost() ? `<div class="row">${timer.enabled ? `<button class="btn ghost" onclick="window.action('/api/timer/${timer.status === "paused" ? "resume" : "pause"}')">${timer.status === "paused" ? "เล่นต่อ" : "หยุดเวลา"}</button>` : ""}<button class="btn secondary" onclick="window.action('/api/game/turn/next')" ${turn.completed ? "disabled" : ""}>คนถัดไป</button><button class="btn primary" onclick="window.action('/api/game/vote/start')" ${!turn.completed ? "" : ""}>เริ่มโหวต</button></div>` : `<span>Host จะควบคุมลำดับการเล่น</span>`}</section>
   </main>`, "play-shell");
 };
 const voteView = () => {
@@ -353,7 +370,7 @@ const voteView = () => {
 const voteRevealView = () => {
   const outcome = state.room.round.voteOutcome;
   const captured = outcome.capturedIds.map(playerName);
-  return layout(`<main class="center-page"><section class="panel decision-card"><span class="eyebrow">ผลการโหวต</span><div class="decision-avatars">${outcome.capturedIds.map((id) => avatar(playerById(id), "xl")).join("")}</div><h1>${outcome.tied ? "คะแนนโหวตเสมอกัน" : `คุณคิดว่า “${escapeHtml(captured.join(" และ "))}”`}</h1><h2>${outcome.tied ? "ยังจับคนข้างบ้านไม่ได้" : "คือคนข้างบ้านใช่หรือไม่?"}</h2><div class="verdict ${outcome.capturedAll ? "correct" : "wrong"}">${outcome.capturedAll ? "✅ จับคนข้างบ้านถูกต้อง" : "❌ ยังจับคนข้างบ้านไม่สำเร็จ"}</div>${isHost() ? `<button class="btn primary jumbo" onclick="action('/api/vote/reveal/continue')">ดูขั้นตอนถัดไป</button>` : `<p>รอ Host ดำเนินเกมต่อ</p>`}</section></main>`);
+  return layout(`<main class="center-page"><section class="panel decision-card"><span class="eyebrow">ผลการโหวต</span><div class="decision-avatars">${outcome.capturedIds.map((id) => avatar(playerById(id), "xl")).join("")}</div><h1>${outcome.tied ? "คะแนนโหวตเสมอกัน" : `คุณคิดว่า “${escapeHtml(captured.join(" และ "))}”`}</h1><h2>${outcome.tied ? "ยังจับคนข้างบ้านไม่ได้" : "คือคนข้างบ้านใช่หรือไม่?"}</h2><div class="verdict ${outcome.capturedAll ? "correct" : "wrong"}">${outcome.capturedAll ? "✅ จับคนข้างบ้านถูกต้อง" : "❌ ยังจับคนข้างบ้านไม่สำเร็จ"}</div>${isHost() ? `<button class="btn primary jumbo" onclick="window.action('/api/vote/reveal/continue')">ดูขั้นตอนถัดไป</button>` : `<p>รอ Host ดำเนินเกมต่อ</p>`}</section></main>`);
 };
 const guessAnswers = () => {
   const guesses = state.room.round.guesses || [];
@@ -364,12 +381,12 @@ const guessView = () => {
   const neighbor = state.me.role === "neighbor";
   const guessed = state.room.round.guessedPlayerIds.includes(state.me.playerId);
   const manual = state.room.round.manualJudging;
-  return layout(`<main class="guess-page"><section class="panel guess-card"><span class="eyebrow">LAST CHANCE</span><h1>คนข้างบ้านทายคำลับ</h1><p>ถ้าทายถูก ฝ่ายคนข้างบ้านจะพลิกกลับมาชนะ</p>${neighbor && !guessed && !manual ? `<form class="guess-form" onsubmit="submitGuess(event)"><input name="guessedWord" required autofocus autocomplete="off" placeholder="พิมพ์คำตอบ"><button class="btn primary">ส่งคำตอบ</button></form>` : `<div class="waiting-bubble">${manual ? "Host กำลังตัดสินคำตอบจากเสียง" : guessed ? "ส่งคำตอบแล้ว" : "รอคนข้างบ้านส่งคำตอบ"}</div>`}${guessAnswers()}</section><aside class="panel host-judge"><h2>สำหรับ Host</h2><p>ใช้เมื่อเล่นผ่าน Discord หรือพูดคำตอบต่อหน้ากัน</p>${isHost() ? manual ? `<div class="judge-buttons"><button class="btn success jumbo" onclick="action('/api/guess/manual',{isCorrect:true})">✅ ตอบถูก</button><button class="btn danger jumbo" onclick="action('/api/guess/manual',{isCorrect:false})">❌ ตอบผิด</button></div>` : `<button class="btn secondary jumbo" onclick="action('/api/guess/skip')">ข้าม</button>` : `<p class="helper">Host เป็นผู้ควบคุมส่วนนี้</p>`}</aside></main>`);
+  return layout(`<main class="guess-page"><section class="panel guess-card"><span class="eyebrow">LAST CHANCE</span><h1>คนข้างบ้านทายคำลับ</h1><p>ถ้าทายถูก ฝ่ายคนข้างบ้านจะพลิกกลับมาชนะ</p>${neighbor && !guessed && !manual ? `<form class="guess-form" onsubmit="submitGuess(event)"><input name="guessedWord" required autofocus autocomplete="off" placeholder="พิมพ์คำตอบ"><button class="btn primary">ส่งคำตอบ</button></form>` : `<div class="waiting-bubble">${manual ? "Host กำลังตัดสินคำตอบจากเสียง" : guessed ? "ส่งคำตอบแล้ว" : "รอคนข้างบ้านส่งคำตอบ"}</div>`}${guessAnswers()}</section><aside class="panel host-judge"><h2>สำหรับ Host</h2><p>ใช้เมื่อเล่นผ่าน Discord หรือพูดคำตอบต่อหน้ากัน</p>${isHost() ? manual ? `<div class="judge-buttons"><button class="btn success jumbo" onclick="window.action('/api/guess/manual',{isCorrect:true})">✅ ตอบถูก</button><button class="btn danger jumbo" onclick="window.action('/api/guess/manual',{isCorrect:false})">❌ ตอบผิด</button></div>` : `<button class="btn secondary jumbo" onclick="window.action('/api/guess/skip')">ข้าม</button>` : `<p class="helper">Host เป็นผู้ควบคุมส่วนนี้</p>`}</aside></main>`);
 };
 const resultView = () => {
   const result = state.room.round.result;
   const neighborWin = result.winner === "neighbor";
-  return layout(`<main class="result-page"><section class="panel result-card"><div class="winner-icon">${neighborWin ? "🕵️" : "🏡"}</div><span class="eyebrow">GAME SUMMARY</span><h1>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ!" : "ฝ่ายคนบ้านเดียวกันชนะ!"}</h1><p>${escapeHtml(result.reason)}</p><div class="summary-grid"><div><span>จำนวนรอบที่เล่น</span><strong>${result.roundsPlayed} รอบ</strong></div><div><span>เวลาที่ใช้ทั้งหมด</span><strong>${formatTime(result.totalSeconds)}</strong></div><div><span>คนเริ่มเกม</span><strong>${escapeHtml(playerName(result.startingPlayerId))}</strong></div><div><span>คำลับ</span><strong>${escapeHtml(result.secretWord)}</strong></div><div class="wide"><span>คนข้างบ้าน</span><strong>${result.neighborIds.map(playerName).map(escapeHtml).join(", ")}</strong></div></div>${result.guesses?.length ? `<h3>คำตอบของคนข้างบ้าน</h3>${guessAnswers()}` : ""}<div class="result-actions">${isHost() ? `<button class="btn primary jumbo" onclick="action('/api/game/reset')">เล่นใหม่</button>` : `<p>รอ Host เริ่มเกมใหม่ในห้องเดิม</p>`}<button class="btn ghost" onclick="leaveRoom()">กลับ Lobby</button></div></section></main>`);
+  return layout(`<main class="result-page"><section class="panel result-card"><div class="winner-icon">${neighborWin ? "🕵️" : "🏡"}</div><span class="eyebrow">GAME SUMMARY</span><h1>${neighborWin ? "ฝ่ายคนข้างบ้านชนะ!" : "ฝ่ายคนบ้านเดียวกันชนะ!"}</h1><p>${escapeHtml(result.reason)}</p><div class="summary-grid"><div><span>จำนวนรอบที่เล่น</span><strong>${result.roundsPlayed} รอบ</strong></div><div><span>เวลาที่ใช้ทั้งหมด</span><strong>${formatTime(result.totalSeconds)}</strong></div><div><span>คนเริ่มเกม</span><strong>${escapeHtml(playerName(result.startingPlayerId))}</strong></div><div><span>คำลับ</span><strong>${escapeHtml(result.secretWord)}</strong></div><div class="wide"><span>คนข้างบ้าน</span><strong>${result.neighborIds.map(playerName).map(escapeHtml).join(", ")}</strong></div></div>${result.guesses?.length ? `<h3>คำตอบของคนข้างบ้าน</h3>${guessAnswers()}` : ""}<div class="result-actions">${isHost() ? `<button class="btn primary jumbo" onclick="window.action('/api/game/reset')">เล่นใหม่</button>` : `<p>รอ Host เริ่มเกมใหม่ในห้องเดิม</p>`}<button class="btn ghost" onclick="leaveRoom()">กลับ Lobby</button></div></section></main>`);
 };
 const closedView = () => layout(`<main class="center-page"><section class="panel closed-card"><div>🚪</div><h1>ห้องถูกปิดแล้ว</h1><p>${escapeHtml(state.closedMessage)}</p><button class="btn primary jumbo" onclick="goLobby()">กลับ Lobby</button></section></main>`);
 
